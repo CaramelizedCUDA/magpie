@@ -66,6 +66,14 @@ jobs:
         with:
           bun-version: 1.4.2
 
+      - name: TEMP mac verbose stderr tests
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          which bun || echo "bun not on PATH"
+          bun --version || true
+          go test -v -count=1 -tags "" ./internal/plugin/ -run '^(TestHostStartsPastAnOverlongStderrLine|TestDrainStderrKeepsTheChildGoing)$'
+
       - name: Test
         if: runner.os != 'Windows'
         run: go test -tags "${{ steps.tags.outputs.tags }}" ./...
