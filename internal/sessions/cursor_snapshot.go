@@ -24,7 +24,18 @@ var (
 	// left behind; a shared copy in use is touched on every reuse
 	cursorSnapStale = time.Hour
 	cursorCopies    atomic.Int64
+	// cursorCopyRoot overrides where snapshot copies are made and swept
+	// from, os.TempDir() when empty. Tests point it at a per-test folder:
+	// Windows' temp dir ignores TMPDIR, the only isolation the tests had.
+	cursorCopyRoot string
 )
+
+func cursorCopyBase() string {
+	if cursorCopyRoot != "" {
+		return cursorCopyRoot
+	}
+	return os.TempDir()
+}
 
 type cursorSnap struct {
 	path, dir, stamp string
@@ -123,7 +134,7 @@ func (s *cursorSnap) drop() {
 // own, cloning where the file system can so the copy takes no space.
 func snapshotCursorStore(path string, open func(string, string) (*sql.DB, error)) (*sql.DB, string, error) {
 	cursorSnaps.sweep.Do(sweepCursorSnaps)
-	tmp, err := os.MkdirTemp("", "magpie-cursor-")
+	tmp, err := os.MkdirTemp(cursorCopyBase(), "magpie-cursor-")
 	if err != nil {
 		return nil, "", err
 	}
@@ -149,7 +160,7 @@ func snapshotCursorStore(path string, open func(string, string) (*sql.DB, error)
 
 // sweepCursorSnaps removes copies an earlier magpie was killed holding.
 func sweepCursorSnaps() {
-	old, _ := filepath.Glob(filepath.Join(os.TempDir(), "magpie-cursor-*"))
+	old, _ := filepath.Glob(filepath.Join(cursorCopyBase(), "magpie-cursor-*"))
 	for _, d := range old {
 		if fi, err := os.Stat(d); err == nil && fi.IsDir() && time.Since(fi.ModTime()) > cursorSnapStale {
 			os.RemoveAll(d)

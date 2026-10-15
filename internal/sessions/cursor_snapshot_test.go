@@ -13,7 +13,7 @@ import (
 
 func cursorTempCopies(t *testing.T) []string {
 	t.Helper()
-	d, _ := filepath.Glob(filepath.Join(os.TempDir(), "magpie-cursor-*"))
+	d, _ := filepath.Glob(filepath.Join(cursorCopyBase(), "magpie-cursor-*"))
 	return d
 }
 
@@ -23,7 +23,8 @@ func cursorTempCopies(t *testing.T) []string {
 // store share one copy, a change makes one new copy, and nothing is left.
 func TestCursorEditorCopiedOncePerChange(t *testing.T) {
 	cursorSetup(t)
-	t.Setenv("TMPDIR", t.TempDir())
+	cursorCopyRoot = t.TempDir()
+	t.Cleanup(func() { cursorCopyRoot = "" })
 	// The copy lingers past any pause a loaded runner makes between two
 	// reads while copies are counted (a 100ms linger let a slow runner drop
 	// it between List and the next visit, and count a third copy); it is
@@ -126,9 +127,11 @@ func TestCursorEditorCopiedOncePerChange(t *testing.T) {
 // A copy left by a magpie that was killed mid-read is removed; one a
 // running magpie made a moment ago is not.
 func TestCursorLeftCopiesSwept(t *testing.T) {
-	t.Setenv("TMPDIR", t.TempDir())
-	left := filepath.Join(os.TempDir(), "magpie-cursor-left")
-	fresh := filepath.Join(os.TempDir(), "magpie-cursor-fresh")
+	root := t.TempDir()
+	cursorCopyRoot = root
+	t.Cleanup(func() { cursorCopyRoot = "" })
+	left := filepath.Join(root, "magpie-cursor-left")
+	fresh := filepath.Join(root, "magpie-cursor-fresh")
 	for _, d := range []string{left, fresh} {
 		if err := os.MkdirAll(d, 0700); err != nil {
 			t.Fatal(err)
