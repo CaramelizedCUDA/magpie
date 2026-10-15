@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -67,11 +68,20 @@ func TestUpdateThatWontStart(t *testing.T) {
 	if restartToUpdate(false, true, "settings") {
 		t.Fatal("restartToUpdate said to quit, with nothing left that starts")
 	}
-	if relaunched.Load() != 1 {
+	// on Windows the staged version is tried before install (canStart,
+	// #894): the refusal is the trial's, a text file being no program, and
+	// the relaunch never happens; elsewhere the put-in version is refused
+	// at the relaunch, a policy's
+	var wantRelaunches int32 = 1
+	var wantPolicy = true
+	if runtime.GOOS == "windows" {
+		wantRelaunches, wantPolicy = 0, false
+	}
+	if relaunched.Load() != wantRelaunches {
 		t.Fatalf("relaunched %d times", relaunched.Load())
 	}
 	j := u.json()
-	if j.State != "blocked" || j.Blocked == nil || j.Blocked.Version != "0.1.11" || !j.Blocked.Policy {
+	if j.State != "blocked" || j.Blocked == nil || j.Blocked.Version != "0.1.11" || j.Blocked.Policy != wantPolicy {
 		t.Fatalf("after the refused restart: %+v", j)
 	}
 	if _, err := os.Stat(filepath.Join(settings.Dir(), updatedInAppFile)); !os.IsNotExist(err) {

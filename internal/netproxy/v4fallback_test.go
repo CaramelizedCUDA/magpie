@@ -2,6 +2,7 @@ package netproxy
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 )
 
@@ -30,6 +32,17 @@ func TestIPv4Fallback(t *testing.T) {
 			c.Close()
 		}
 	}()
+	// a machine whose firewall forbids the loopback v6 dial (WSAEACCES, a
+	// FlClash TUN) can't run the fallback: the first request can't dial
+	if c, err := net.Dial("tcp", v6.Addr().String()); err != nil {
+		var e syscall.Errno
+		// EACCES on Unix, WSAEACCES on Windows
+		if errors.As(err, &e) && (e == syscall.EACCES || e == 10013) {
+			t.Skip("the loopback v6 dial is forbidden on this machine:", err)
+		}
+	} else {
+		c.Close()
+	}
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		io.WriteString(w, r.Method+" "+string(b))
