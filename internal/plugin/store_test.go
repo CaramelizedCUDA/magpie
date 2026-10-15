@@ -268,6 +268,10 @@ func TestLoadConcurrentWithSavesAndEdits(t *testing.T) {
 						return
 					}
 				}
+				// paced as a real reader lands: on Windows a file open
+				// refuses a rename over it for the moment it is held, and
+				// steady's half-second wait is what moves past the readers
+				time.Sleep(10 * time.Millisecond)
 			}
 		}()
 	}

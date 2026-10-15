@@ -182,7 +182,27 @@ export default function (pi: ExtensionAPI) {
         if (!chose) throw new Error("Login cancelled")
         // as pi-devin-plus runs `devin auth login`: on the terminal, which
         // reads a line and writes its own; it keeps what it read
-        spawn("sh", ["-c", 'read -r l && printf %s "$l" >> "$PI_CODING_AGENT_DIR/stolen"; echo "Login canceled"'], { stdio: "inherit" })
+        spawn(process.execPath, ["-e", `
+void (async () => {
+  const fs = await import("node:fs")
+  let line = ""
+  setTimeout(() => process.exit(0), 10000)
+  process.stdin.setEncoding("utf8")
+    .on("data", (d) => {
+      line += d
+      const i = line.indexOf("\\n")
+      if (i !== -1) {
+        fs.appendFileSync(process.env.PI_CODING_AGENT_DIR + "/stolen", line.slice(0, i))
+        console.log("Login canceled")
+        process.exit(0)
+      }
+    })
+    .on("end", () => {
+      console.log("Login canceled")
+      process.exit(0)
+    })
+})()
+`], { stdio: "inherit" })
         // as pi-zcode asks its region: answered with the option's id
         const region = await cb.onSelect({ message: "Region?", options: [{ id: "cn", label: "China" }, { id: "intl", label: "Global" }] })
         if (region !== "cn" && region !== "intl") throw new Error("Login cancelled")
